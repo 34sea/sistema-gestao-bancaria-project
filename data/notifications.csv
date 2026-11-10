@@ -1,0 +1,18 @@
+1,4,Bem-vindo ao Banco,A sua conta de acesso foi criada com sucesso. Bem-vindo!,GERAL,false,2026-11-10T09:13:08.180710200
+2,5,Bem-vindo ao Banco,A sua conta de acesso foi criada com sucesso. Bem-vindo!,GERAL,false,2026-11-10T09:13:08.245478500
+3,6,Bem-vindo ao Banco,A sua conta de acesso foi criada com sucesso. Bem-vindo!,GERAL,false,2026-11-10T09:13:08.310694
+4,7,Bem-vindo ao Banco,A sua conta de acesso foi criada com sucesso. Bem-vindo!,GERAL,false,2026-11-10T09:13:08.372953400
+5,8,Bem-vindo ao Banco,A sua conta de acesso foi criada com sucesso. Bem-vindo!,GERAL,false,2026-11-10T09:13:08.436524
+6,4,Depósito realizado,"Foi efectuado um depósito de 25.000,00 MZN na conta 100000001",DEPOSITO,false,2026-11-10T09:13:08.748226500
+7,5,Depósito realizado,"Foi efectuado um depósito de 8.000,00 MZN na conta 100000002",DEPOSITO,false,2026-11-10T09:13:08.866356700
+8,6,Depósito realizado,"Foi efectuado um depósito de 120.000,00 MZN na conta 100000003",DEPOSITO,false,2026-11-10T09:13:09.175663200
+9,7,Depósito realizado,"Foi efectuado um depósito de 3.500,00 MZN na conta 100000004",DEPOSITO,false,2026-11-10T09:13:09.261996800
+10,8,Depósito realizado,"Foi efectuado um depósito de 45.000,00 MZN na conta 100000005",DEPOSITO,false,2026-11-10T09:13:09.360622100
+11,4,Depósito realizado,"Foi efectuado um depósito de 5.000,00 MZN na conta 100000006",DEPOSITO,false,2026-11-10T09:13:09.434913500
+12,6,Depósito realizado,"Foi efectuado um depósito de 15.000,00 MZN na conta 100000007",DEPOSITO,false,2026-11-10T09:13:09.493806700
+13,4,Transferência recebida,"Recebeu 7.500,00 MZN da conta 100000003 — Partilha de despesas",TRANSFERENCIA,false,2026-11-10T09:13:09.651125600
+14,5,Transferência recebida,"Recebeu 1.200,00 MZN da conta 100000001 — Presente de aniversário",TRANSFERENCIA,false,2026-11-10T09:13:09.715834900
+15,7,Transferência recebida,"Recebeu 2.000,00 MZN da conta 100000005 — Reembolso",TRANSFERENCIA,false,2026-11-10T09:13:09.802944600
+16,10,Bem-vindo ao Banco,A sua conta de acesso foi criada com sucesso. Bem-vindo!,GERAL,false,2026-11-10T09:19:06.320649
+17,10,Depósito realizado,"Foi efectuado um depósito de 5.000,00 MZN na conta 100000008",DEPOSITO,false,2026-11-10T09:21:13.777253100
+18,6,Transferência recebida,"Recebeu 200,00 MZN da conta 100000008",TRANSFERENCIA,false,2026-11-10T09:22:49.255288600
