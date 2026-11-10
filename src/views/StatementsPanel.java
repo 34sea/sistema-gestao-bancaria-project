@@ -14,7 +14,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.function.Supplier;
 
-/** Extracto bancário por conta e período: pré-visualização em aplicação + gravação em PDF. */
+/** Extracto bancário por conta e período: pré-visualização + gravação em PDF. */
 public class StatementsPanel extends JPanel implements DashboardFrame.Refreshable {
 
     private final User user;
@@ -22,8 +22,8 @@ public class StatementsPanel extends JPanel implements DashboardFrame.Refreshabl
     private final Supplier<List<models.Account>> accountProvider;
 
     private final AccountPicker picker;
-    private final JSpinner from = TransactionsPanel.dateSpinner();
-    private final JSpinner to = TransactionsPanel.dateSpinner();
+    private final DatePicker from;
+    private final DatePicker to;
     private final DefaultTableModel model = new DefaultTableModel(
             new String[]{"Data", "Operação", "Valor", "Saldo após", "Estado", "Descrição"}, 0) {
         @Override public boolean isCellEditable(int r, int c) { return false; }
@@ -31,7 +31,6 @@ public class StatementsPanel extends JPanel implements DashboardFrame.Refreshabl
     private final JTable table = new JTable(model);
     private final JLabel initial = new JLabel(" ");
     private final JLabel fin = new JLabel(" ");
-    private QueryService.StatementData last;
 
     public StatementsPanel(User user) {
         this(user, () -> {
@@ -45,6 +44,8 @@ public class StatementsPanel extends JPanel implements DashboardFrame.Refreshabl
         this.user = user;
         this.accountProvider = accountProvider;
         picker = new AccountPicker(accountProvider);
+        from = new DatePicker(LocalDate.now().minusDays(30));
+        to = new DatePicker(LocalDate.now());
 
         setLayout(new BorderLayout(0, 12));
         setOpaque(false);
@@ -52,7 +53,7 @@ public class StatementsPanel extends JPanel implements DashboardFrame.Refreshabl
         JPanel card = Theme.card(14);
         card.setLayout(new BorderLayout(0, 12));
 
-        // linha de extracção
+        // linha de opções
         JPanel options = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
         options.setOpaque(false);
         JPanel accWrap = new JPanel(new BorderLayout(4, 2));
@@ -60,16 +61,8 @@ public class StatementsPanel extends JPanel implements DashboardFrame.Refreshabl
         accWrap.add(new JLabel("Conta *"), BorderLayout.NORTH);
         accWrap.add(picker, BorderLayout.CENTER);
         options.add(accWrap);
-        JPanel fromWrap = new JPanel(new BorderLayout(4, 2));
-        fromWrap.setOpaque(false);
-        fromWrap.add(new JLabel("De"), BorderLayout.NORTH);
-        fromWrap.add(from, BorderLayout.CENTER);
-        options.add(fromWrap);
-        JPanel toWrap = new JPanel(new BorderLayout(4, 2));
-        toWrap.setOpaque(false);
-        toWrap.add(new JLabel("Até"), BorderLayout.NORTH);
-        toWrap.add(to, BorderLayout.CENTER);
-        options.add(toWrap);
+        options.add(labelled("De", from));
+        options.add(labelled("Até", to));
 
         JButton generate = Theme.button("VER EXTRACTO");
         generate.addActionListener(e -> preview());
@@ -98,8 +91,15 @@ public class StatementsPanel extends JPanel implements DashboardFrame.Refreshabl
         card.add(center, BorderLayout.CENTER);
 
         add(card, BorderLayout.CENTER);
-        from.setValue(TransactionsPanel.toDate(LocalDate.now().minusDays(30)));
-        to.setValue(TransactionsPanel.toDate(LocalDate.now()));
+    }
+
+    private JComponent labelled(String text, JComponent comp) {
+        JPanel w = new JPanel(new BorderLayout(3, 3));
+        w.setOpaque(false);
+        w.add(new JLabel(text), BorderLayout.NORTH);
+        w.add(comp, BorderLayout.CENTER);
+        w.setPreferredSize(new Dimension(comp.getPreferredSize().width + 6, 56));
+        return w;
     }
 
     @Override public void onShow() {
@@ -108,18 +108,25 @@ public class StatementsPanel extends JPanel implements DashboardFrame.Refreshabl
 
     private void preview() {
         String number = picker.selectedNumber();
-        LocalDate f = spinnerDate(from);
-        LocalDate d = spinnerDate(to);
+        if (number == null) {
+            JOptionPane.showMessageDialog(this, "Escolha uma conta para emitir o extracto.",
+                    "Aviso", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        LocalDate f = from.getDate(), d = to.getDate();
         try {
-            last = queries.statement(user, number, f, d);
-            models.Account acc = last.account();
-            initial.setText("Saldo inicial (até " + (f == null ? "agora" : f) + "): " + Money.format(last.initialBalance()));
+            if (f != null && d != null && f.isAfter(d)) {
+                throw new exceptions.BusinessException("A data inicial não pode ser posterior à final.");
+            }
+            QueryService.StatementData last = queries.statement(user, number, f, d);
+            initial.setText("Saldo inicial (antes de " + (f == null ? "histórico" : f) + "): "
+                    + Money.format(last.initialBalance()));
             fin.setText("Saldo final do período: " + Money.format(last.finalBalance()));
             model.setRowCount(0);
             for (QueryService.Row r : last.rows()) {
                 String signed = ("ENTRADA".equals(r.direction()) ? "+" : "-") + r.amount();
                 model.addRow(new Object[]{
-                        r.date().length() >= 10 ? r.date().substring(0, 10) : r.date(),
+                        r.date(),
                         r.type(), signed, r.balanceAfter(), r.status(), r.description()});
             }
             if (last.rows().isEmpty()) {
@@ -133,8 +140,12 @@ public class StatementsPanel extends JPanel implements DashboardFrame.Refreshabl
 
     private void savePdf() {
         String number = picker.selectedNumber();
-        LocalDate f = spinnerDate(from);
-        LocalDate d = spinnerDate(to);
+        if (number == null) {
+            JOptionPane.showMessageDialog(this, "Escolha uma conta para guardar o extracto PDF.",
+                    "Aviso", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        LocalDate f = from.getDate(), d = to.getDate();
         try {
             JFileChooser chooser = new JFileChooser();
             chooser.setSelectedFile(new java.io.File("extracto-" + number
@@ -148,11 +159,5 @@ public class StatementsPanel extends JPanel implements DashboardFrame.Refreshabl
         } catch (Exception ex) {
             JOptionPane.showMessageDialog(this, ex.getMessage(), "Erro", JOptionPane.ERROR_MESSAGE);
         }
-    }
-
-    static LocalDate spinnerDate(JSpinner s) {
-        java.util.Date d = (java.util.Date) s.getValue();
-        if (d == null) return null;
-        return d.toInstant().atZone(java.time.ZoneId.systemDefault()).toLocalDate();
     }
 }

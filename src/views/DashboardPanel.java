@@ -32,7 +32,6 @@ public class DashboardPanel extends JPanel implements DashboardFrame.Refreshable
         setOpaque(false);
 
         kpiRow.setOpaque(false);
-        add(kpiRow, BorderLayout.NORTH);
 
         // ---------------- gráficos ----------------
         JPanel charts = new JPanel(new GridLayout(2, 2, 14, 14));
@@ -62,6 +61,7 @@ public class DashboardPanel extends JPanel implements DashboardFrame.Refreshable
         charts.add(c2);
         charts.add(c3);
         charts.add(c4);
+        charts.setPreferredSize(new Dimension(10, 430)); // garante área legível aos gráficos
 
         JPanel bottom = new JPanel(new BorderLayout(14, 14));
         bottom.setOpaque(false);
@@ -69,6 +69,8 @@ public class DashboardPanel extends JPanel implements DashboardFrame.Refreshable
         distCard.setLayout(new BorderLayout());
         distCard.add(header("Distribuição de contas por tipo"), BorderLayout.NORTH);
         Theme.styleTable(distribution);
+        // viewport de altura fixa: impede que a tabela "roube" o vertical dos gráficos
+        distribution.setPreferredScrollableViewportSize(new Dimension(120, 118));
         distCard.add(Theme.scroll(distribution), BorderLayout.CENTER);
         bottom.add(distCard, BorderLayout.CENTER);
 
@@ -77,7 +79,19 @@ public class DashboardPanel extends JPanel implements DashboardFrame.Refreshable
         center.add(charts, BorderLayout.CENTER);
         center.add(bottom, BorderLayout.SOUTH);
 
-        add(center, BorderLayout.CENTER);
+        // tudo dentro de scroll horizontal-fixo: em janelas pequenas os gráficos
+        // nunca colapsam — o utilizador navega verticalmente
+        JPanel content = new JPanel(new BorderLayout(0, 14));
+        content.setOpaque(false);
+        content.add(kpiRow, BorderLayout.NORTH);
+        content.add(center, BorderLayout.CENTER);
+        JScrollPane scroller = new JScrollPane(content);
+        scroller.setBorder(null);
+        scroller.getVerticalScrollBar().setUnitIncrement(18);
+        scroller.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+        scroller.getViewport().setBackground(Theme.BG);
+        add(scroller, BorderLayout.CENTER);
+
         onShow();
     }
 

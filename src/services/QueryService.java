@@ -6,9 +6,11 @@ import models.Account;
 import models.AccountType;
 import models.Transaction;
 import models.User;
+import persistence.BankStore.TransferRow;
 import repositories.AccountRepository;
 import repositories.ClientRepository;
 import repositories.TransactionRepository;
+import repositories.TransferRepository;
 import utils.Money;
 
 import java.math.BigDecimal;
@@ -25,6 +27,7 @@ public class QueryService {
     private final TransactionRepository tx = new TransactionRepository();
     private final AccountRepository accounts = new AccountRepository();
     private final ClientRepository clients = new ClientRepository();
+    private final TransferRepository transfersRepo = new TransferRepository();
 
     public record MovementsPage(List<Row> rows, int total, int page, int pageSize) {}
 
@@ -88,6 +91,49 @@ public class QueryService {
             }
         }
         return t;
+    }
+
+    // ------------------------------------------------------------ transferências
+
+    public record TransferLine(String code, String sourceAccount, String targetAccount, String amount,
+                               String description, String performedBy, String status, String date) {}
+
+    /**
+     * Histórico de transferências, do mais recente para o mais antigo.
+     * Funcionários/administradores vêem todas; o cliente apenas as que envolvem
+     * contas suas (regra de isolamento).
+     */
+    public List<TransferLine> transfersFor(User actor) {
+        if (actor == null) throw new BusinessException("Sessão inválida.");
+        List<Long> ownIds = null;
+        if (actor.isClient()) {
+            ownIds = new ArrayList<>();
+            for (Account a : accounts.byClient(actor.clientIdOrZero())) ownIds.add(a.id);
+        }
+        List<TransferRow> rows = new ArrayList<>(transfersRepo.allRaw());
+        rows.sort((x, y) -> {
+            if (x.createdAt == null && y.createdAt == null) return Long.compare(y.id, x.id);
+            if (x.createdAt == null) return 1;
+            if (y.createdAt == null) return -1;
+            int c = y.createdAt.compareTo(x.createdAt);
+            return c != 0 ? c : Long.compare(y.id, x.id);
+        });
+        List<TransferLine> out = new ArrayList<>();
+        for (TransferRow r : rows) {
+            if (ownIds != null && !ownIds.contains(r.sourceAccountId) && !ownIds.contains(r.targetAccountId)) continue;
+            Account from = accounts.byId(r.sourceAccountId);
+            Account to = accounts.byId(r.targetAccountId);
+            out.add(new TransferLine(
+                    r.code,
+                    from == null ? "" : from.accountNumber,
+                    to == null ? "" : to.accountNumber,
+                    Money.number(r.amount),
+                    r.description == null ? "" : r.description,
+                    r.performedBy == null ? "" : r.performedBy,
+                    r.status == null ? "" : r.status,
+                    r.createdAt == null ? "" : r.createdAt.toString().replace('T', ' ')));
+        }
+        return out;
     }
 
     // ------------------------------------------------------------ extractos

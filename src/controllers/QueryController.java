@@ -33,6 +33,10 @@ public class QueryController {
         return service.byCode(actor, code);
     }
 
+    public List<QueryService.TransferLine> transfersFor(User actor) throws Exception {
+        return service.transfersFor(actor);
+    }
+
     public QueryService.StatementData statement(User actor, String accountNumber, LocalDate from, LocalDate to) throws Exception {
         return service.statement(actor, accountNumber, from, to);
     }

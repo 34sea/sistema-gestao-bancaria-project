@@ -5,7 +5,6 @@ import models.Transaction;
 import models.User;
 import services.QueryService;
 import services.StatementPdfService;
-import utils.Money;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
@@ -20,6 +19,7 @@ import java.util.List;
  */
 public class TransactionsPanel extends JPanel implements DashboardFrame.Refreshable {
 
+    private static final String ALL_ACCOUNTS = "TODAS AS CONTAS";
     private static final String[] TYPES = {"TODOS", "DEPOSITO", "LEVANTAMENTO",
             "TRANSFERENCIA_ENVIADA", "TRANSFERENCIA_RECEBIDA", "JUROS"};
     private static final String[] STATUS = {"TODOS", "CONCLUIDA", "PENDENTE", "RECUSADA", "CANCELADA"};
@@ -35,33 +35,37 @@ public class TransactionsPanel extends JPanel implements DashboardFrame.Refresha
     private final JTable table = new JTable(model);
     private final JComboBox<String> type = Theme.combo(TYPES);
     private final JComboBox<String> status = Theme.combo(STATUS);
-    private final JComboBox<String> account;
-    private final JTextField textSearch = new JTextField(12);
-    private final JSpinner from = dateSpinner();
-    private final JSpinner to = dateSpinner();
+    private final JComboBox<String> account = new JComboBox<>();
+    private final JTextField textSearch = new JTextField(10);
+    private final DatePicker from;
+    private final DatePicker to;
     private final JLabel pageInfo = new JLabel(" ");
     private int page = 1;
     private int total = 0;
     private static final int PAGE_SIZE = 15;
-    private QueryService.MovementsPage last;
 
     public TransactionsPanel(User user, boolean clientScoped) {
         this.user = user;
         this.clientScoped = clientScoped;
 
+        // contas visíveis consoante o perfil (o cliente só as próprias;
+        // funcionário/administrador todas) — primeiro item = filtro "todas"
         DefaultComboBoxModel<String> accountModel = new DefaultComboBoxModel<>();
-        if (clientScoped) {
-            accountModel.addElement("TODAS AS CONTAS");
-            try {
-                for (models.Account a : new controllers.AccountController().accountsForClient(user)) {
-                    accountModel.addElement(a.accountNumber);
-                }
-            } catch (Exception ignored) {}
-            account = new JComboBox<>(accountModel);
-        } else {
-            account = new JComboBox<>();
-            account.setEditable(true);
+        accountModel.addElement(ALL_ACCOUNTS);
+        try {
+            List<models.Account> list = clientScoped
+                    ? new controllers.AccountController().accountsForClient(user)
+                    : new controllers.AccountController().list(null, null);
+            for (models.Account a : list) accountModel.addElement(a.accountNumber);
+        } catch (Exception e) {
+            JOptionPane.showMessageDialog(this,
+                    "Não foi possível carregar as contas: " + e.getMessage(), "Erro", JOptionPane.ERROR_MESSAGE);
         }
+        account.setModel(accountModel);
+
+        LocalDate today = LocalDate.now();
+        from = new DatePicker(today.minusDays(30));
+        to = new DatePicker(today);
 
         setLayout(new BorderLayout(0, 12));
         setOpaque(false);
@@ -75,22 +79,14 @@ public class TransactionsPanel extends JPanel implements DashboardFrame.Refresha
         filters.add(type);
         filters.add(new JLabel("Estado:"));
         filters.add(status);
-        if (clientScoped) {
-            filters.add(new JLabel("Conta:"));
-            filters.add(account);
-        } else {
-            JPanel accWrap = new JPanel(new BorderLayout(4, 4));
-            accWrap.setOpaque(false);
-            accWrap.add(new JLabel("Conta:"), BorderLayout.NORTH);
-            accWrap.add(account, BorderLayout.CENTER);
-            accWrap.setPreferredSize(new Dimension(200, 52));
-            filters.add(accWrap);
-        }
-        JPanel fromWrap = dateWrap("De", from);
-        JPanel toWrap = dateWrap("Até", to);
-        filters.add(fromWrap);
-        filters.add(toWrap);
-        filters.add(new JLabel("Livres:"));
+        filters.add(new JLabel("Conta:"));
+        account.setPreferredSize(new Dimension(170, 34));
+        filters.add(account);
+        from.setPreferredSize(new Dimension(210, 34));
+        to.setPreferredSize(new Dimension(210, 34));
+        filters.add(labelled("De", from));
+        filters.add(labelled("Até", to));
+        filters.add(new JLabel("Pesquisa livre:"));
         filters.add(textSearch);
 
         JButton go = Theme.button("FILTRAR");
@@ -101,9 +97,10 @@ public class TransactionsPanel extends JPanel implements DashboardFrame.Refresha
         clear.addActionListener(e -> {
             type.setSelectedIndex(0);
             status.setSelectedIndex(0);
+            account.setSelectedIndex(0);
             textSearch.setText("");
-            from.setValue(toDate(LocalDate.now().minusDays(30)));
-            to.setValue(toDate(LocalDate.now()));
+            from.setDate(today.minusDays(30));
+            to.setDate(today);
             page = 1;
             reload();
         });
@@ -113,7 +110,7 @@ public class TransactionsPanel extends JPanel implements DashboardFrame.Refresha
         card.add(filters, BorderLayout.NORTH);
         card.add(Theme.scroll(table), BorderLayout.CENTER);
 
-        // paginação
+        // paginação + comprovativo
         JPanel paging = new JPanel(new BorderLayout());
         paging.setOpaque(false);
         JButton prev = Theme.ghost("‹ ANTERIOR");
@@ -136,41 +133,16 @@ public class TransactionsPanel extends JPanel implements DashboardFrame.Refresha
 
         card.add(paging, BorderLayout.SOUTH);
         add(card, BorderLayout.CENTER);
-
-        from.setValue(toDate(LocalDate.now().minusDays(30)));
-        to.setValue(toDate(LocalDate.now()));
         reload();
-
-        // botões redondos imitando o tema no fundo branco
-        prev.setBackground(Color.WHITE);
     }
 
-    /** Barra de filtros composta no cartão acima. */
-    private JPanel dateWrap(String label, JSpinner spinner) {
-        JPanel wrap = new JPanel(new BorderLayout(4, 2));
-        wrap.setOpaque(false);
-        wrap.add(new JLabel(label), BorderLayout.NORTH);
-        wrap.add(spinner, BorderLayout.CENTER);
-        wrap.setPreferredSize(new Dimension(150, 52));
-        return wrap;
-    }
-
-    static JSpinner dateSpinner() {
-        JSpinner s = new JSpinner(new SpinnerDateModel());
-        s.setEditor(new JSpinner.DateEditor(s, "yyyy-MM-dd"));
-        Dimension d = new Dimension(130, 30);
-        s.setPreferredSize(d);
-        return s;
-    }
-
-    static java.util.Date toDate(LocalDate d) {
-        return d == null ? null : java.util.Date.from(d.atStartOfDay(java.time.ZoneId.systemDefault()).toInstant());
-    }
-
-    static LocalDate spinnerDate(JSpinner s) {
-        java.util.Date d = (java.util.Date) s.getValue();
-        if (d == null) return null;
-        return ((java.util.Date) s.getValue()).toInstant().atZone(java.time.ZoneId.systemDefault()).toLocalDate();
+    private JComponent labelled(String text, JComponent comp) {
+        JPanel w = new JPanel(new BorderLayout(3, 3));
+        w.setOpaque(false);
+        w.add(new JLabel(text), BorderLayout.NORTH);
+        w.add(comp, BorderLayout.CENTER);
+        w.setPreferredSize(new Dimension(comp.getPreferredSize().width + 6, 52));
+        return w;
     }
 
     private void reloadNext() {
@@ -182,20 +154,18 @@ public class TransactionsPanel extends JPanel implements DashboardFrame.Refresha
         try {
             String t = (String) type.getSelectedItem();
             String st = (String) status.getSelectedItem();
-            String acc = String.valueOf(account.getSelectedItem());
-            LocalDate f = spinnerDate(from);
-            LocalDate d = spinnerDate(to);
+            String acc = account.getSelectedItem() == null ? ""
+                    : String.valueOf(account.getSelectedItem()).trim();
+            if (acc.equals(ALL_ACCOUNTS)) acc = "";
 
             QueryService.MovementsPage p = clientScoped
-                    ? queries.movementsForClient(user, t, st, acc, f, d, page, PAGE_SIZE)
-                    : queries.allMovements(t, st, acc, f, d, page, PAGE_SIZE);
-            last = p;
+                    ? queries.movementsForClient(user, t, st, acc, from.getDate(), to.getDate(), page, PAGE_SIZE)
+                    : queries.allMovements(t, st, acc, from.getDate(), to.getDate(), page, PAGE_SIZE);
             total = p.total();
 
             String q = textSearch.getText().toLowerCase();
-            List<QueryService.Row> rows = p.rows();
             model.setRowCount(0);
-            for (QueryService.Row r : rows) {
+            for (QueryService.Row r : p.rows()) {
                 if (!q.isBlank()
                         && !(r.description() != null && r.description().toLowerCase().contains(q))
                         && !(r.code() != null && r.code().toLowerCase().contains(q))
@@ -205,11 +175,12 @@ public class TransactionsPanel extends JPanel implements DashboardFrame.Refresha
                 boolean entrada = "ENTRADA".equals(r.direction());
                 String signed = (entrada ? "+" : "-") + r.amount();
                 model.addRow(new Object[]{
-                        r.code(), r.date() == null ? "" : r.date().replace('T', ' '), r.type(),
-                        signed, r.direction(), r.balanceAfter(), r.status(), r.accountNumber(), r.description()});
+                        r.code(), r.date(), r.type(), signed, r.direction(),
+                        r.balanceAfter(), r.status(), r.accountNumber(), r.description()});
             }
             int maxPage = Math.max(1, (int) Math.ceil((double) total / PAGE_SIZE));
-            pageInfo.setText("Página " + (int) Math.min(page, maxPage) + " de " + maxPage + "  •  " + total + " movimentos");
+            pageInfo.setText("Página " + Math.min(page, maxPage) + " de " + maxPage + "  •  "
+                    + total + " movimentos" + (p.rows().isEmpty() && q.isBlank() ? "  (sem movimentos nos filtros escolhidos)" : ""));
         } catch (Exception e) {
             JOptionPane.showMessageDialog(this, e.getMessage(), "Erro", JOptionPane.ERROR_MESSAGE);
         }
@@ -240,6 +211,24 @@ public class TransactionsPanel extends JPanel implements DashboardFrame.Refresha
     }
 
     @Override public void onShow() { reload(); }
+
+    public void reloadAccountFilter() {
+        String current = account.getSelectedItem() == null ? null : String.valueOf(account.getSelectedItem());
+        DefaultComboBoxModel<String> m = (DefaultComboBoxModel<String>) account.getModel();
+        m.removeAllElements();
+        m.addElement(ALL_ACCOUNTS);
+        try {
+            List<models.Account> list = clientScoped
+                    ? new controllers.AccountController().accountsForClient(user)
+                    : new controllers.AccountController().list(null, null);
+            for (models.Account a : list) m.addElement(a.accountNumber);
+        } catch (Exception ignored) {}
+        if (current != null) {
+            for (int i = 0; i < m.getSize(); i++) {
+                if (m.getElementAt(i).equals(current)) { m.setSelectedItem(current); break; }
+            }
+        }
+    }
 
     public Transaction selectedTransaction() {
         int r = table.getSelectedRow();

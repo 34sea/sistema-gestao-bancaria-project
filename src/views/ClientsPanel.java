@@ -9,7 +9,6 @@ import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 /** Gestão de clientes: registo (com credencial), pesquisa, edição e estados. */
@@ -161,7 +160,7 @@ public class ClientsPanel extends JPanel implements DashboardFrame.Refreshable {
 
             JTextField fullName = new JTextField(20);
             JTextField documentNumber = new JTextField(20);
-            JTextField birthDateField = new JTextField(10);
+            DatePicker birthDate = new DatePicker();
             JComboBox<String> gender = Theme.combo(new String[]{"MASCULINO", "FEMININO"});
             JTextField address = new JTextField(20);
             JTextField city = new JTextField(15);
@@ -174,7 +173,7 @@ public class ClientsPanel extends JPanel implements DashboardFrame.Refreshable {
             form.setOpaque(false);
             form.add(Theme.formRow("Nome completo *", fullName));
             form.add(Theme.formRow("Nº de identificação (BI) *", documentNumber));
-            form.add(Theme.formRow("Data de nascimento (AAAA-MM-DD)", birthDateField));
+            form.add(Theme.formRow("Data de nascimento (escolha no calendário)", birthDate));
             form.add(Theme.formRow("Género", gender));
             form.add(Theme.formRow("Endereço", address));
             form.add(Theme.formRow("Cidade", city));
@@ -188,9 +187,7 @@ public class ClientsPanel extends JPanel implements DashboardFrame.Refreshable {
             if (existing != null) {
                 fullName.setText(existing.fullName);
                 documentNumber.setText(existing.documentNumber);
-                if (existing.birthDate != null) {
-                    birthDateField.setText(existing.birthDate.format(DateTimeFormatter.ISO_LOCAL_DATE));
-                }
+                birthDate.setDate(existing.birthDate);
                 gender.setSelectedItem(existing.gender);
                 address.setText(existing.address);
                 city.setText(existing.city);
@@ -209,8 +206,10 @@ public class ClientsPanel extends JPanel implements DashboardFrame.Refreshable {
             JButton save = Theme.button(existing == null ? "REGISTAR" : "GUARDAR");
             save.addActionListener(e -> {
                 try {
-                    LocalDate bd = birthDateField.getText().isBlank()
-                            ? null : LocalDate.parse(birthDateField.getText().trim());
+                    if (birthDate.hasInvalidText()) {
+                        throw new exceptions.BusinessException("Data de nascimento inválida (use o calendário ou AAAA-MM-DD).");
+                    }
+                    LocalDate bd = birthDate.getDate();
                     ClientController cc = new ClientController();
                     if (existing == null) {
                         long n = cc.register(actor, fullName.getText(), documentNumber.getText(), bd,

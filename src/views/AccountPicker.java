@@ -8,13 +8,17 @@ import java.util.List;
 import java.util.function.Supplier;
 
 /**
- * Seleccionador reutilizável de contas: campo de pesquisa + lista combinada
- * (editável — pode escrever-se o número directamente) + botão actualizar.
+ * Seleccionador reutilizável de contas: lista combinada (editável — também se
+ * pode escrever o número directamente) + botão de actualização. Mostra um
+ * marcador claro quando não há contas disponíveis para o utilizador.
  */
 public class AccountPicker extends JPanel {
 
+    public static final String NOTHING = "— sem contas disponíveis —";
+
     private final Supplier<List<Account>> provider;
     private final JComboBox<String> combo = new JComboBox<>();
+    private boolean empty = true;
 
     public AccountPicker(Supplier<List<Account>> provider) {
         this.provider = provider;
@@ -29,12 +33,15 @@ public class AccountPicker extends JPanel {
         refresh();
     }
 
-    /** Número seleccionado (texto digitado ou da lista). */
+    /** Número seleccionado (texto digitado ou da lista); null quando vazio/sem contas. */
     public String selectedNumber() {
         Object item = combo.isEditable() && combo.getEditor().getItem() != null
                 && !String.valueOf(combo.getEditor().getItem()).isBlank()
                 ? combo.getEditor().getItem() : combo.getSelectedItem();
-        return item == null ? null : String.valueOf(item).trim();
+        if (item == null) return null;
+        String s = String.valueOf(item).trim();
+        if (s.isEmpty() || NOTHING.equals(s)) return null;
+        return s;
     }
 
     public Account selectedAccount() {
@@ -44,6 +51,9 @@ public class AccountPicker extends JPanel {
         return null;
     }
 
+    /** true quando existem contas reais para escolher. */
+    public boolean hasAccounts() { return !empty; }
+
     public void setNumber(String number) {
         combo.setSelectedItem(number);
         combo.getEditor().setItem(number);
@@ -52,15 +62,21 @@ public class AccountPicker extends JPanel {
     public void refresh() {
         String current = selectedNumber();
         combo.removeAllItems();
+        combo.getEditor().setItem("");
         List<Account> list = provider.get();
-        for (Account a : list) combo.addItem(a.accountNumber);
-        // procura por titular ao digitar: garante item digitado visível
-        if (current != null && !current.isBlank()) {
-            combo.setSelectedItem(current);
+        empty = list.isEmpty();
+        if (empty) {
+            combo.addItem(NOTHING);
+        } else {
+            for (Account a : list) combo.addItem(a.accountNumber);
+            if (current != null && !current.isBlank()) {
+                if (list.stream().anyMatch(a -> a.accountNumber.equals(current))) {
+                    combo.setSelectedItem(current);
+                    combo.getEditor().setItem(current);
+                }
+            } else {
+                combo.getEditor().setItem(list.get(0).accountNumber);
+            }
         }
-    }
-
-    public static JComboBox<String> withAll(JComboBox<String> combo) {
-        return combo;
     }
 }

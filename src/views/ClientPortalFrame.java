@@ -78,6 +78,13 @@ public class ClientPortalFrame extends JFrame {
         tabs.addTab("Notificações", new NotificationsTab());
         tabs.addTab("O meu perfil", new ProfileTab());
 
+        // cada aba carrega os seus dados ao ser seleccionada (os ComboBox e
+        // tabelas de abas menos usadas ficavam vazios sem isto)
+        tabs.addChangeListener(e -> {
+            Component sel = tabs.getSelectedComponent();
+            if (sel instanceof DashboardFrame.Refreshable r) r.onShow();
+        });
+
         setContentPane(new JPanel(new BorderLayout()));
         getContentPane().add(header, BorderLayout.NORTH);
         getContentPane().add(tabs, BorderLayout.CENTER);
@@ -149,14 +156,19 @@ public class ClientPortalFrame extends JFrame {
         }
     }
 
-    /** Aba "Transferir": origens nas contas próprias + verificação de beneficiário + confirmação. */
+    /** Aba "Transferir": origens nas contas próprias + verificação + histórico das próprias transferências. */
     private class TransferTab extends JPanel implements DashboardFrame.Refreshable {
         private final JComboBox<String> source = new JComboBox<>();
         private final JTextField target = Theme.field(16);
         private final JTextField amount = Theme.field(12);
         private final JTextField description = Theme.field(20);
         private final JLabel beneficiary = new JLabel(" ");
+        private final JLabel emptySource = new JLabel(" ");
         private BankingService.Beneficiary verified;
+        private final DefaultTableModel historyModel = new DefaultTableModel(
+                new String[]{"Código", "Origem", "Destino", "Valor", "Estado", "Data/hora", "Descrição"}, 0) {
+            @Override public boolean isCellEditable(int r, int c) { return false; }
+        };
 
         TransferTab() {
             setLayout(new BorderLayout(0, 14));
@@ -168,7 +180,13 @@ public class ClientPortalFrame extends JFrame {
             JLabel t = new JLabel("Transferência entre as minhas contas");
             t.setFont(new Font("SansSerif", Font.BOLD, 15));
             t.setForeground(Theme.NAVY);
-            card.add(t, BorderLayout.NORTH);
+            emptySource.setFont(new Font("SansSerif", Font.BOLD, 12));
+            emptySource.setForeground(Theme.RED);
+            JPanel titleStack = new JPanel(new BorderLayout(0, 2));
+            titleStack.setOpaque(false);
+            titleStack.add(t, BorderLayout.NORTH);
+            titleStack.add(emptySource, BorderLayout.SOUTH);
+            card.add(titleStack, BorderLayout.NORTH);
 
             JPanel form = new JPanel(new GridBagLayout());
             form.setOpaque(false);
@@ -203,21 +221,53 @@ public class ClientPortalFrame extends JFrame {
             actions.add(submit);
             card.add(actions, BorderLayout.SOUTH);
 
-            card.setPreferredSize(new Dimension(560, 360));
-            add(card, BorderLayout.NORTH);
+            card.setPreferredSize(new Dimension(560, 400));
+            add(card, BorderLayout.WEST);
+
+            // histórico das transferências do próprio cliente
+            JPanel historyCard = Theme.card(14);
+            historyCard.setLayout(new BorderLayout(0, 10));
+            JLabel hTitle = new JLabel("As minhas transferências");
+            hTitle.setFont(new Font("SansSerif", Font.BOLD, 15));
+            hTitle.setForeground(Theme.NAVY);
+            historyCard.add(hTitle, BorderLayout.NORTH);
+            JTable historyTable = new JTable(historyModel);
+            Theme.styleTable(historyTable);
+            historyTable.getColumnModel().getColumn(4).setCellRenderer(new ClientsPanel.StatusColorRenderer());
+            historyCard.add(Theme.scroll(historyTable), BorderLayout.CENTER);
+            add(historyCard, BorderLayout.CENTER);
         }
 
         @Override public void onShow() {
-            try {
-                String current = String.valueOf(source.getSelectedItem());
-                source.removeAllItems();
-                for (Account a : myAccounts()) source.addItem(a.accountNumber + "  •  " + Money.format(a.balance));
-                if (current != null) {
-                    for (int i = 0; i < source.getItemCount(); i++) {
-                        if (source.getItemAt(i).startsWith(current)) { source.setSelectedIndex(i); break; }
-                    }
+            String current = source.getSelectedItem() == null
+                    ? null : String.valueOf(source.getSelectedItem()).split("  •  ")[0].trim();
+            List<Account> mine = myAccounts();
+            source.removeAllItems();
+            for (Account a : mine) source.addItem(a.accountNumber + "  •  " + Money.format(a.balance));
+            if (current != null && !current.isBlank()) {
+                for (int i = 0; i < source.getItemCount(); i++) {
+                    if (source.getItemAt(i).startsWith(current)) { source.setSelectedIndex(i); break; }
                 }
-            } catch (Exception ignored) {}
+            }
+            emptySource.setText(mine.isEmpty()
+                    ? "Não tem contas disponíveis para transferir. Contacte o seu banco."
+                    : " ");
+            reloadHistory();
+        }
+
+        private void reloadHistory() {
+            try {
+                historyModel.setRowCount(0);
+                for (services.QueryService.TransferLine l : queries.transfersFor(user)) {
+                    historyModel.addRow(new Object[]{l.code(), l.sourceAccount(), l.targetAccount(),
+                            l.amount(), l.status(), l.date(), l.description()});
+                }
+                if (historyModel.getRowCount() == 0) {
+                    historyModel.addRow(new Object[]{"sem transferências registadas ainda", "", "", "", "", "", ""});
+                }
+            } catch (Exception e) {
+                JOptionPane.showMessageDialog(ClientPortalFrame.this, e.getMessage(), "Erro", JOptionPane.ERROR_MESSAGE);
+            }
         }
 
         private void doVerify() {

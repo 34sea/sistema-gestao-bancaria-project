@@ -3,7 +3,7 @@ package views;
 import controllers.QueryController;
 
 import javax.swing.*;
-import javax.swing.table.DefaultTableModel;
+import javax.swing.border.EmptyBorder;
 import java.awt.*;
 import java.util.List;
 
@@ -13,25 +13,40 @@ public class ReportsPanel extends JPanel {
     private final QueryController queries = new QueryController();
 
     public ReportsPanel() {
-        setLayout(new GridLayout(2, 2, 14, 14));
+        setLayout(new BorderLayout(0, 12));
         setOpaque(false);
+
+        JLabel head = new JLabel("Relatórios — séries diárias dos últimos 14 dias");
+        head.setFont(new Font("SansSerif", Font.BOLD, 17));
+        head.setForeground(Theme.NAVY);
+        add(head, BorderLayout.NORTH);
+
+        JPanel charts = new JPanel(new GridLayout(2, 2, 14, 14));
+        charts.setOpaque(false);
 
         BarChartPanel deposits = new BarChartPanel(Theme.BLUE);
         BarChartPanel withdrawals = new BarChartPanel(Theme.RED);
         BarChartPanel transfers = new BarChartPanel(Theme.GREEN);
         BarChartPanel volume = new BarChartPanel(Theme.NAVY);
 
-        add(chartCard("Depósitos diários (últimos 14 dias)", deposits));
-        add(chartCard("Levantamentos diários (últimos 14 dias)", withdrawals));
-        add(chartCard("Transferências enviadas (últimos 14 dias)", transfers));
-        add(chartCard("Volume total diário (últimos 14 dias)", volume));
+        charts.add(chartCard("Depósitos diários", deposits));
+        charts.add(chartCard("Levantamentos diários", withdrawals));
+        charts.add(chartCard("Transferências enviadas", transfers));
+        charts.add(chartCard("Volume total diário", volume));
+        charts.setPreferredSize(new Dimension(10, 430));
+
+        JScrollPane scroller = new JScrollPane(charts);
+        scroller.setBorder(null);
+        scroller.getVerticalScrollBar().setUnitIncrement(18);
+        scroller.getViewport().setBackground(Theme.BG);
+        add(scroller, BorderLayout.CENTER);
 
         try {
             var series = queries.dailySeriesByType();
             deposits.setSeries(toSeries(series.get("DEPOSITO"), 1));
             withdrawals.setSeries(toSeries(series.get("LEVANTAMENTO"), 1));
             transfers.setSeries(toSeries(series.get("TRANSFERENCIA_ENVIADA"), 1));
-            volume.setSeries(toSeries(queries.dailyVolume(), 2)); // volume = soma na 3ª coluna
+            volume.setSeries(toSeries(queries.dailyVolume(), 2)); // volume = 3ª coluna
         } catch (Exception e) {
             JOptionPane.showMessageDialog(this, e.getMessage(), "Erro", JOptionPane.ERROR_MESSAGE);
         }
@@ -55,10 +70,10 @@ public class ReportsPanel extends JPanel {
     private JPanel chartCard(String title, JComponent chart) {
         JPanel card = Theme.card(14);
         card.setLayout(new BorderLayout());
-        JLabel l = new JLabel(title);
+        JLabel l = new JLabel(title + " — últimos 14 dias");
         l.setFont(new Font("SansSerif", Font.BOLD, 13));
         l.setForeground(Theme.NAVY);
-        l.setBorder(BorderFactory.createEmptyBorder(0, 0, 8, 0));
+        l.setBorder(new EmptyBorder(0, 0, 8, 0));
         card.add(l, BorderLayout.NORTH);
         card.add(chart, BorderLayout.CENTER);
         return card;

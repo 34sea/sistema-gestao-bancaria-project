@@ -172,7 +172,6 @@ public class BankingService {
         String desc = description == null || description.isBlank() ? "Transferência entre contas" : description;
         String txCode = Ids.transactionCode();
 
-        // uma única operação de escrita: transferência + dois movimentos + notificação + auditoria
         TransferRow row = new TransferRow();
         row.code = tcode;
         row.sourceAccountId = src.id;
@@ -215,7 +214,6 @@ public class BankingService {
                 sentAfter == null ? srcAfter : sentAfter, desc);
     }
 
-    /** Devolve o resultado de uma transferência já registada (mesma chave). */
     private TransferResult existingTransferResult(TransferRow row) {
         Account src = accounts.byId(row.sourceAccountId);
         Account dst = accounts.byId(row.targetAccountId);
