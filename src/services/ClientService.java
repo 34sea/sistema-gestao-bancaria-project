@@ -10,6 +10,7 @@ import repositories.ClientRepository;
 import repositories.NotificationRepository;
 import repositories.UserRepository;
 import utils.Passwords;
+import utils.Validation;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -26,28 +27,30 @@ public class ClientService {
     public long register(User actor, String fullName, String documentNumber,
                          LocalDate birthDate, String gender, String address, String city,
                          String phone, String email, String username, String password) throws Exception {
-        validatePersonal(fullName, documentNumber, email, phone);
+        validatePersonal(fullName, documentNumber, email, phone, birthDate, username, password);
         if (username == null || username.isBlank()) {
             throw new BusinessException("Defina o utilizador de acesso do cliente.");
-        }
-        if (password == null || password.length() < 8) {
-            throw new BusinessException("A palavra-passe deve ter pelo menos 8 caracteres.");
         }
         ensureUnique(null, fullName, documentNumber, email, username);
 
         String hash = Passwords.hash(password);
+        String normPhone = Validation.requirePhone(phone);
+        String normEmail = Validation.normalizeEmail(email);
+        String name = Validation.requireName(fullName, "O nome completo");
+        String doc = Validation.document(documentNumber);
+        String user = Validation.username(username);
         return BankStore.writeOperation(v -> {
             Client p = new Client();
-            p.fullName = fullName.strip();
-            p.documentNumber = documentNumber.strip();
+            p.fullName = name;
+            p.documentNumber = doc;
             p.birthDate = birthDate;
             p.gender = gender;
-            p.address = address;
-            p.city = city;
-            p.phone = phone;
-            p.email = email == null || email.isBlank() ? null : email.strip();
+            p.address = Validation.optionalText(address, "O endereço", Validation.SHORT_TEXT_MAX);
+            p.city = Validation.optionalText(city, "A cidade", Validation.SHORT_TEXT_MAX);
+            p.phone = normPhone;
+            p.email = normEmail;
             long clientId = clients.insert(p);
-            users.create(username.strip(), fullName.strip(), email == null ? null : email.strip(),
+            users.create(user, name, normEmail,
                     hash, "CLIENTE", clientId, null, null);
             audits.record(actor == null ? 0 : actor.id(), actor == null ? "SISTEMA" : actor.username(),
                     actor == null ? "ADMIN" : actor.role(), "REGISTAR_CLIENTE",
@@ -64,19 +67,23 @@ public class ClientService {
                        LocalDate birthDate, String gender, String address, String city,
                        String phone, String email) throws Exception {
         requireStaff(actor);
-        validatePersonal(fullName, documentNumber, email, phone);
+        validatePersonal(fullName, documentNumber, email, phone, birthDate, null, null);
+        ensureUnique(clientId, fullName, documentNumber, email, null);
+        String normPhone = Validation.requirePhone(phone);
+        String normEmail = Validation.normalizeEmail(email);
+        String name = Validation.requireName(fullName, "O nome completo");
+        String doc = Validation.document(documentNumber);
         BankStore.writeOperation(v -> {
             Client p = clients.findById(clientId);
             if (p == null) throw new BusinessException("Cliente não encontrado.");
-            ensureUnique(clientId, fullName, documentNumber, email, null);
-            p.fullName = fullName.strip();
-            p.documentNumber = documentNumber.strip();
+            p.fullName = name;
+            p.documentNumber = doc;
             p.birthDate = birthDate;
             p.gender = gender;
-            p.address = address;
-            p.city = city;
-            p.phone = phone;
-            p.email = email == null || email.isBlank() ? null : email.strip();
+            p.address = Validation.optionalText(address, "O endereço", Validation.SHORT_TEXT_MAX);
+            p.city = Validation.optionalText(city, "A cidade", Validation.SHORT_TEXT_MAX);
+            p.phone = normPhone;
+            p.email = normEmail;
             clients.update(p);
             audits.record(actor.id(), actor.username(), actor.role(), "ACTUALIZAR_CLIENTE",
                     "CLIENTE", String.valueOf(clientId), "CONCLUIDA", null);
@@ -110,16 +117,17 @@ public class ClientService {
     /** Actualização autónoma permitida ao cliente (dados de contacto). */
     public void updateOwn(User actor, String phone, String email, String address, String city) throws Exception {
         if (actor == null || !actor.isClient()) throw new BusinessException("Contexto de cliente inválido.");
-        if (email != null && !email.isBlank() && !email.matches("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$")) {
-            throw new BusinessException("E-mail inválido.");
-        }
+        String normPhone = Validation.normalizePhone(phone); // opcional, mas formato obrigatório quando preenchido
+        String normEmail = Validation.normalizeEmail(email);
+        String addr = Validation.optionalText(address, "O endereço", Validation.SHORT_TEXT_MAX);
+        String cty = Validation.optionalText(city, "A cidade", Validation.SHORT_TEXT_MAX);
         BankStore.writeOperation(v -> {
             Client p = clients.findById(actor.clientIdOrZero());
             if (p == null) throw new BusinessException("Cliente não encontrado.");
-            p.phone = phone;
-            p.email = email == null || email.isBlank() ? null : email.strip();
-            p.address = address;
-            p.city = city;
+            p.phone = normPhone;
+            p.email = normEmail;
+            p.address = addr;
+            p.city = cty;
             clients.update(p);
             return null;
         });
@@ -131,14 +139,15 @@ public class ClientService {
 
     // -------------------------------------------------------------- validações
 
-    private void validatePersonal(String fullName, String documentNumber, String email, String phone) {
+    private void validatePersonal(String fullName, String documentNumber, String email, String phone,
+                                  LocalDate birthDate, String username, String password) throws Exception {
         if (fullName == null || fullName.isBlank()) throw new BusinessException("O nome completo é obrigatório.");
-        if (documentNumber == null || documentNumber.isBlank()) {
-            throw new BusinessException("O número de identificação é obrigatório.");
-        }
-        if (email != null && !email.isBlank() && !email.matches("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$")) {
-            throw new BusinessException("E-mail inválido.");
-        }
+        Validation.document(documentNumber);
+        Validation.birthDate(birthDate);
+        Validation.normalizeEmail(email);   // null quando vazio; erro quando formato inválido
+        Validation.requirePhone(phone);     // obrigatório; 9 dígitos, prefixo 82–88 (+258 aceito)
+        if (password != null) Validation.checkPassword(password);
+        if (username != null) Validation.username(username);
     }
 
     /** Unicidade de BI/e-mail/utilizador com mensagens amigáveis (ignoreId permite a edição do próprio registo). */

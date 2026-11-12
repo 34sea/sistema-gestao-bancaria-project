@@ -32,11 +32,12 @@ public class AuthService {
         return user;
     }
 
-    /** Alteração de senha própria (exige a senha actual, mínimo de 8 caracteres). */
+    /** Alteração de senha própria (exige a senha actual e uma nova senha forte). */
     public void changePassword(User actor, String current, String next) throws Exception {
         if (actor == null) throw new ForbiddenException("Sessão inválida.");
-        if (next == null || next.length() < 8) {
-            throw new exceptions.BusinessException("A nova palavra-passe deve ter pelo menos 8 caracteres.");
+        utils.Validation.checkPassword(next);
+        if (next.equals(current)) {
+            throw new exceptions.BusinessException("A nova palavra-passe deve ser diferente da actual.");
         }
         UserRow row = users.rawById(actor.id());
         if (row == null) throw new exceptions.BusinessException("Utilizador não encontrado.");

@@ -193,7 +193,7 @@ realizados por si).
 - **Notificações**: lista com marcas NOVA/lida, marcar uma ou todas como lidas
   (indicador de não lidas no separador).
 - **O meu perfil**: actualizar telefone/e-mail/endereço/cidade e alterar a
-  própria palavra-passe (exige a actual, mín. 8 caracteres).
+  própria palavra-passe (exige a actual + senha forte com confirmação).
 
 ### Segurança e regras de negócio (idênticas ao original)
 - Login por **utilizador, e-mail ou BI**, senha com PBKDF2; contas inactivas
@@ -208,6 +208,25 @@ realizados por si).
 - Encerramento de conta exige **saldo zero** e é exclusivo do administrador;
   bloqueio de conta e de cliente revogam o acesso no momento.
 - Tudo é registado em **auditoria** (sucessos e falhas).
+
+### Validações de dados (frontend + backend)
+Todas as validações existem nas **duas camadas**: a tela impede a submissão com
+mensagens específicas (e destaca o campo inválido a vermelho) e os serviços
+revalidam antes de gravar, garantindo a integridade mesmo se a tela for ignorada
+(`utils/Validation.java` é a fonte única das regras).
+
+| Campo | Regra |
+|---|---|
+| **Palavra-passe** | mínimo 8 caracteres + pelo menos uma maiúscula, uma minúscula, um número e um carácter especial; confirmação obrigatória e igual nos formulários de criação, reposição e alteração; mensagens indicam **exactamente** os requisitos em falta |
+| **Celular (Moçambique)** | 9 dígitos, prefixo **82–88**; aceita `+258`/`258` e espaços/traços (ex.: `+258 84 111 0001` → `841110001`, gravado normalizado); recusa letras, símbolos, comprimentos e prefixos inválidos |
+| **E-mail** | formato `nome@dominio.com` (opcional nos formulários); gravado em minúsculas |
+| **BI** | 8–20 caracteres alfanuméricos (travessões permitidos), único |
+| **Nome completo** | obrigatório, 3–120 caracteres, apenas letras e separadores |
+| **Utilizador** | 4–30 caracteres (letras, números, `.`, `-`, `_`), único |
+| **Valores monetários** | > 0, máx. 2 casas decimais, tecto de 10 mil milhões MZN (aceita `1.500,50` e `1500.50`) |
+| **Datas** | componente de calendário (`DatePicker`) em todos os campos — nascimento não pode ser no futuro nem antes de 1900 |
+| **Texto livre** | endereço, cidade, cargo, departamento: máx. 120/60 caracteres |
+| **Campos obrigatórios** | marcados com `*`; o formulário lista todos os problemas de uma vez e não submete enquanto existirem erros |
 
 ---
 

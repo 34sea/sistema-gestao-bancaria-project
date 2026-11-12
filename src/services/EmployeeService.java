@@ -7,6 +7,7 @@ import persistence.BankStore.UserRow;
 import repositories.AuditRepository;
 import repositories.UserRepository;
 import utils.Passwords;
+import utils.Validation;
 
 import java.util.List;
 
@@ -23,15 +24,18 @@ public class EmployeeService {
     public long create(User actor, String username, String fullName, String email,
                        String password, String position, String department) throws Exception {
         requireAdmin(actor);
-        validate(username, fullName, password);
-        if (users.existsUsername(username)) {
+        String user = validate(username, fullName, email, password, null);
+        if (users.existsUsername(user)) {
             throw new BusinessException("Já existe um utilizador com este nome de acesso.");
         }
         String hash = Passwords.hash(password);
+        String normEmail = Validation.normalizeEmail(email);
+        String pos = Validation.optionalText(position, "O cargo", 60);
+        String dep = Validation.optionalText(department, "O departamento", 60);
         return BankStore.writeOperation(v -> {
-            long userId = users.create(username.strip(), fullName.strip(), blankToNull(email),
+            long userId = users.create(user, fullName.strip(), normEmail,
                     hash, "FUNCIONARIO", null,
-                    position == null || position.isBlank() ? "FUNCIONARIO" : position, department);
+                    pos == null ? "FUNCIONARIO" : pos, dep);
             audits.record(actor.id(), actor.username(), actor.role(), "CRIAR_FUNCIONARIO",
                     "USER", String.valueOf(userId), "CONCLUIDA", username);
             return userId;
@@ -41,13 +45,14 @@ public class EmployeeService {
     /** Criação directa de utilizador administrativo (perfil ADMIN). */
     public long createAdmin(User actor, String username, String fullName, String email, String password) throws Exception {
         requireAdmin(actor);
-        validate(username, fullName, password);
-        if (users.existsUsername(username)) {
+        String user = validate(username, fullName, email, password, null);
+        if (users.existsUsername(user)) {
             throw new BusinessException("Já existe um utilizador com este nome de acesso.");
         }
         String hash = Passwords.hash(password);
+        String normEmail = Validation.normalizeEmail(email);
         return BankStore.writeOperation(v -> {
-            long userId = users.create(username.strip(), fullName.strip(), blankToNull(email),
+            long userId = users.create(user, fullName.strip(), normEmail,
                     hash, "ADMIN", null, "ADMINISTRADOR", "GERAL");
             audits.record(actor.id(), actor.username(), actor.role(), "CRIAR_USER",
                     "USER", String.valueOf(userId), "CONCLUIDA", username);
@@ -77,9 +82,7 @@ public class EmployeeService {
 
     public void resetPassword(User actor, long userId, String newPassword) throws Exception {
         requireAdmin(actor);
-        if (newPassword == null || newPassword.length() < 8) {
-            throw new BusinessException("Palavra-passe deve ter pelo menos 8 caracteres.");
-        }
+        Validation.checkPassword(newPassword);
         String hash = Passwords.hash(newPassword);
         BankStore.writeOperation(v -> {
             UserRow u = users.rawById(userId);
@@ -98,12 +101,18 @@ public class EmployeeService {
         return users.listRows("FUNCIONARIO", search);
     }
 
-    private void validate(String username, String fullName, String password) {
-        if (username == null || username.isBlank()) throw new BusinessException("Utilizador obrigatório.");
-        if (fullName == null || fullName.isBlank()) throw new BusinessException("Nome obrigatório.");
-        if (password == null || password.length() < 8) {
-            throw new BusinessException("A palavra-passe deve ter pelo menos 8 caracteres.");
+    /** Validação comum de credenciais; devolve o nome de utilizador normalizado. */
+    private String validate(String username, String fullName, String email, String password, String confirm)
+            throws BusinessException {
+        String user = Validation.username(username);
+        if (fullName == null || fullName.isBlank()) throw new BusinessException("O nome é obrigatório.");
+        Validation.requireName(fullName, "O nome");
+        Validation.normalizeEmail(email); // null quando vazio; erro quando formato inválido
+        Validation.checkPassword(password);
+        if (confirm != null && !confirm.equals(password)) {
+            throw new BusinessException("A confirmação da palavra-passe não coincide com a palavra-passe.");
         }
+        return user;
     }
 
     private void requireAdmin(User actor) {
@@ -112,5 +121,4 @@ public class EmployeeService {
         }
     }
 
-    private static String blankToNull(String v) { return v == null || v.isBlank() ? null : v.strip(); }
 }

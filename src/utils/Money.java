@@ -9,6 +9,8 @@ import java.util.Locale;
 /** Formatação monetária da simulação: sempre MZN, "25.000,00 MZN". */
 public final class Money {
     private static final ThreadLocal<DecimalFormat> FORMAT = ThreadLocal.withInitial(Money::build);
+    /** Limite máximo aceitável para qualquer valor monetário introduzido. */
+    private static final BigDecimal MAX_LIMIT = new BigDecimal("10000000000");
     private Money() {}
 
     private static DecimalFormat build() {
@@ -34,15 +36,23 @@ public final class Money {
     public static BigDecimal parse(String raw) {
         if (raw == null) throw new IllegalArgumentException("Indique um valor.");
         String t = raw.trim().replace(" ", "").replace("MZN", "");
+        if (t.isEmpty()) throw new IllegalArgumentException("Indique um valor.");
         if (t.contains(",")) t = t.replace(".", "").replace(',', '.');
         try {
             BigDecimal v = new BigDecimal(t);
             if (v.scale() > 2) {
                 throw new IllegalArgumentException("O valor monetário não pode ter mais de duas casas decimais.");
             }
+            if (v.compareTo(BigDecimal.ZERO) <= 0) {
+                throw new IllegalArgumentException("O valor monetário deve ser maior que zero.");
+            }
+            if (v.compareTo(MAX_LIMIT) > 0) {
+                throw new IllegalArgumentException("O valor monetário não pode exceder " + number(MAX_LIMIT) + " MZN.");
+            }
             return v;
         } catch (NumberFormatException e) {
-            throw new IllegalArgumentException("Valor monetário inválido: " + raw);
+            throw new IllegalArgumentException("Valor monetário inválido: \"" + raw.trim()
+                    + "\" — use o formato 1.500,50 ou 1500.50.");
         }
     }
 

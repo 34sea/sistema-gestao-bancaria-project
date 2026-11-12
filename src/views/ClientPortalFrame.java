@@ -432,6 +432,7 @@ public class ClientPortalFrame extends JFrame {
         private final JTextField city = Theme.field(15);
         private final JPasswordField currentPassword = Theme.passwordField(15);
         private final JPasswordField newPassword = Theme.passwordField(15);
+        private final JPasswordField newPasswordConfirm = Theme.passwordField(15);
 
         ProfileTab() {
             setLayout(new BorderLayout(0, 14));
@@ -466,7 +467,8 @@ public class ClientPortalFrame extends JFrame {
                     BorderFactory.createTitledBorder("Alterar palavra-passe"),
                     new EmptyBorder(4, 10, 6, 10)));
             passPanel.add(Theme.formRow("Palavra-passe actual", currentPassword));
-            passPanel.add(Theme.formRow("Nova palavra-passe (mín. 8)", newPassword));
+            passPanel.add(Theme.formRow("Nova palavra-passe (" + utils.Validation.passwordRequirements() + ")", newPassword));
+            passPanel.add(Theme.formRow("Confirmar nova palavra-passe", newPasswordConfirm));
             JButton savePass = Theme.ghost("ALTERAR PALAVRA-PASSE");
             savePass.addActionListener(e -> changePassword());
             JPanel passRow = new JPanel(new FlowLayout(FlowLayout.RIGHT));
@@ -488,6 +490,14 @@ public class ClientPortalFrame extends JFrame {
         }
 
         private void saveContact() {
+            java.util.List<String> errors = new java.util.ArrayList<>();
+            FormDialogs.markInvalid(phone, false);
+            FormDialogs.markInvalid(email, false);
+            try { utils.Validation.normalizePhone(phone.getText()); }
+            catch (Exception ex) { errors.add(ex.getMessage()); FormDialogs.markInvalid(phone, true); }
+            try { utils.Validation.normalizeEmail(email.getText()); }
+            catch (Exception ex) { errors.add(ex.getMessage()); FormDialogs.markInvalid(email, true); }
+            if (FormDialogs.showErrors(ClientPortalFrame.this, errors)) return;
             try {
                 clients.updateOwn(user, phone.getText(), email.getText(), address.getText(), city.getText());
                 JOptionPane.showMessageDialog(ClientPortalFrame.this, "Dados actualizados.",
@@ -498,11 +508,22 @@ public class ClientPortalFrame extends JFrame {
         }
 
         private void changePassword() {
+            java.util.List<String> errors = new java.util.ArrayList<>();
+            String cur = new String(currentPassword.getPassword());
+            String next = new String(newPassword.getPassword());
+            for (String i : utils.Validation.passwordIssues(next)) errors.add("A nova palavra-passe não cumpre: " + i);
+            if (!next.equals(new String(newPasswordConfirm.getPassword()))) {
+                errors.add("A confirmação da nova palavra-passe não coincide.");
+            }
+            if (next.equals(cur) && !cur.isEmpty()) {
+                errors.add("A nova palavra-passe deve ser diferente da actual.");
+            }
+            if (FormDialogs.showErrors(ClientPortalFrame.this, errors)) return;
             try {
-                new controllers.AuthController().changePassword(user,
-                        new String(currentPassword.getPassword()), new String(newPassword.getPassword()));
+                new controllers.AuthController().changePassword(user, cur, next);
                 currentPassword.setText("");
                 newPassword.setText("");
+                newPasswordConfirm.setText("");
                 JOptionPane.showMessageDialog(ClientPortalFrame.this, "Palavra-passe alterada.",
                         "Sucesso", JOptionPane.INFORMATION_MESSAGE);
             } catch (Exception ex) {

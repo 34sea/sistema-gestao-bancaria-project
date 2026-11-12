@@ -26,6 +26,7 @@ public class UsersPanel extends JPanel implements DashboardFrame.Refreshable {
     private final JTextField fullName = Theme.field(14);
     private final JTextField email = Theme.field(14);
     private final JPasswordField password = Theme.passwordField(14);
+    private final JPasswordField passwordConfirm = Theme.passwordField(14);
 
     public UsersPanel(User user) {
         this.user = user;
@@ -46,7 +47,8 @@ public class UsersPanel extends JPanel implements DashboardFrame.Refreshable {
         form.add(Theme.formRow("Utilizador *", username));
         form.add(Theme.formRow("Nome completo *", fullName));
         form.add(Theme.formRow("E-mail", email));
-        form.add(Theme.formRow("Palavra-passe * (mín. 8)", password));
+        form.add(Theme.formRow("Palavra-passe * (" + utils.Validation.passwordRequirements() + ")", password));
+        form.add(Theme.formRow("Confirmar palavra-passe *", passwordConfirm));
         JButton create = Theme.danger("CRIAR ADMIN");
         create.addActionListener(e -> createAdmin());
         JPanel createRow = new JPanel(new BorderLayout());
@@ -87,15 +89,32 @@ public class UsersPanel extends JPanel implements DashboardFrame.Refreshable {
     }
 
     private void createAdmin() {
+        java.util.List<String> errors = new java.util.ArrayList<>();
+        for (JComponent f : new JComponent[]{username, fullName, email, password, passwordConfirm})
+            FormDialogs.markInvalid(f, false);
+        try { utils.Validation.username(username.getText()); }
+        catch (Exception ex) { errors.add(ex.getMessage()); FormDialogs.markInvalid(username, true); }
+        try { utils.Validation.requireName(fullName.getText(), "O nome"); }
+        catch (Exception ex) { errors.add(ex.getMessage()); FormDialogs.markInvalid(fullName, true); }
+        try { utils.Validation.normalizeEmail(email.getText()); }
+        catch (Exception ex) { errors.add(ex.getMessage()); FormDialogs.markInvalid(email, true); }
+        String passPlain = new String(password.getPassword());
+        for (String i : utils.Validation.passwordIssues(passPlain)) errors.add("A palavra-passe não cumpre: " + i);
+        if (!passPlain.equals(new String(passwordConfirm.getPassword()))) {
+            errors.add("A confirmação da palavra-passe não coincide com a palavra-passe.");
+            FormDialogs.markInvalid(passwordConfirm, true);
+        }
+        if (FormDialogs.showErrors(this, errors)) return;
+
         try {
-            long id = employees.createAdmin(user, username.getText(), fullName.getText(), email.getText(),
-                    new String(password.getPassword()));
+            long id = employees.createAdmin(user, username.getText(), fullName.getText(), email.getText(), passPlain);
             JOptionPane.showMessageDialog(this, "Utilizador ADMIN criado (ID " + id + ").",
                     "Sucesso", JOptionPane.INFORMATION_MESSAGE);
             username.setText("");
             fullName.setText("");
             email.setText("");
             password.setText("");
+            passwordConfirm.setText("");
             reload();
         } catch (Exception ex) {
             JOptionPane.showMessageDialog(this, ex.getMessage(), "Erro", JOptionPane.ERROR_MESSAGE);
@@ -141,7 +160,7 @@ public class UsersPanel extends JPanel implements DashboardFrame.Refreshable {
             JOptionPane.showMessageDialog(this, "Seleccione um utilizador.", "Aviso", JOptionPane.WARNING_MESSAGE);
             return;
         }
-        String np = JOptionPane.showInputDialog(this, "Nova palavra-passe (mínimo 8 caracteres):");
+        String np = FormDialogs.askNewPassword(this, "Repor palavra-passe do utilizador");
         if (np == null) return;
         try {
             employees.resetPassword(user, id, np);

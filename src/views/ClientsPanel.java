@@ -155,19 +155,20 @@ public class ClientsPanel extends JPanel implements DashboardFrame.Refreshable {
             setTitle(existing == null ? "Registar novo cliente" : "Editar cliente: " + existing.fullName);
             setModal(true);
             setResizable(false);
-            setSize(480, existing == null ? 620 : 520);
+            setSize(500, existing == null ? 680 : 560);
             setLocationRelativeTo(owner);
 
-            JTextField fullName = new JTextField(20);
-            JTextField documentNumber = new JTextField(20);
+            JTextField fullName = Theme.field(20);
+            JTextField documentNumber = Theme.field(20);
             DatePicker birthDate = new DatePicker();
             JComboBox<String> gender = Theme.combo(new String[]{"MASCULINO", "FEMININO"});
-            JTextField address = new JTextField(20);
-            JTextField city = new JTextField(15);
-            JTextField phone = new JTextField(15);
-            JTextField email = new JTextField(20);
-            JTextField username = new JTextField(15);
+            JTextField address = Theme.field(20);
+            JTextField city = Theme.field(15);
+            JTextField phone = Theme.field(15);
+            JTextField email = Theme.field(20);
+            JTextField username = Theme.field(15);
             JPasswordField password = Theme.passwordField(15);
+            JPasswordField passwordConfirm = Theme.passwordField(15);
 
             JPanel form = new JPanel(new GridLayout(0, 1, 6, 6));
             form.setOpaque(false);
@@ -177,11 +178,12 @@ public class ClientsPanel extends JPanel implements DashboardFrame.Refreshable {
             form.add(Theme.formRow("Género", gender));
             form.add(Theme.formRow("Endereço", address));
             form.add(Theme.formRow("Cidade", city));
-            form.add(Theme.formRow("Telefone", phone));
+            form.add(Theme.formRow("Celular * (82–88; aceita +258)", phone));
             form.add(Theme.formRow("E-mail", email));
             if (existing == null) {
                 form.add(Theme.formRow("Utilizador de acesso (portal) *", username));
-                form.add(Theme.formRow("Palavra-passe * (mín. 8)", password));
+                form.add(Theme.formRow("Palavra-passe * (" + utils.Validation.passwordRequirements() + ")", password));
+                form.add(Theme.formRow("Confirmar palavra-passe *", passwordConfirm));
             }
 
             if (existing != null) {
@@ -205,17 +207,46 @@ public class ClientsPanel extends JPanel implements DashboardFrame.Refreshable {
             cancel.addActionListener(e -> dispose());
             JButton save = Theme.button(existing == null ? "REGISTAR" : "GUARDAR");
             save.addActionListener(e -> {
-                try {
-                    if (birthDate.hasInvalidText()) {
-                        throw new exceptions.BusinessException("Data de nascimento inválida (use o calendário ou AAAA-MM-DD).");
+                java.util.List<String> errors = new java.util.ArrayList<>();
+                for (JComponent f : new JComponent[]{fullName, documentNumber, phone, email, username})
+                    FormDialogs.markInvalid(f, false);
+
+                // ---- validação frontal (mensagens específicas; bloqueia a submissão)
+                try { utils.Validation.requireName(fullName.getText(), "O nome completo"); }
+                catch (Exception ex) { errors.add(ex.getMessage()); FormDialogs.markInvalid(fullName, true); }
+                try { utils.Validation.document(documentNumber.getText()); }
+                catch (Exception ex) { errors.add(ex.getMessage()); FormDialogs.markInvalid(documentNumber, true); }
+                if (birthDate.hasInvalidText()) {
+                    errors.add("Data de nascimento inválida — escolha no calendário ou use AAAA-MM-DD.");
+                }
+                try { utils.Validation.requirePhone(phone.getText()); }
+                catch (Exception ex) { errors.add(ex.getMessage()); FormDialogs.markInvalid(phone, true); }
+                try { utils.Validation.normalizeEmail(email.getText()); }
+                catch (Exception ex) { errors.add(ex.getMessage()); FormDialogs.markInvalid(email, true); }
+
+                String passPlain = null;
+                if (existing == null) {
+                    try { utils.Validation.username(username.getText()); }
+                    catch (Exception ex) { errors.add(ex.getMessage()); FormDialogs.markInvalid(username, true); }
+                    passPlain = new String(password.getPassword());
+                    List<String> passIssues = utils.Validation.passwordIssues(passPlain);
+                    for (String i : passIssues) errors.add("A palavra-passe não cumpre: " + i);
+                    if (!passPlain.equals(new String(passwordConfirm.getPassword()))) {
+                        errors.add("A confirmação da palavra-passe não coincide com a palavra-passe.");
+                        FormDialogs.markInvalid(passwordConfirm, true);
                     }
+                }
+
+                if (FormDialogs.showErrors(this, errors)) return;
+
+                // ---- submissão (o serviço revalida no backend)
+                try {
                     LocalDate bd = birthDate.getDate();
                     ClientController cc = new ClientController();
                     if (existing == null) {
                         long n = cc.register(actor, fullName.getText(), documentNumber.getText(), bd,
                                 (String) gender.getSelectedItem(), address.getText(), city.getText(),
-                                phone.getText(), email.getText(), username.getText(),
-                                new String(password.getPassword()));
+                                phone.getText(), email.getText(), username.getText(), passPlain);
                         JOptionPane.showMessageDialog(this,
                                 "Cliente registado (nº " + n + ").", "Sucesso", JOptionPane.INFORMATION_MESSAGE);
                     } else {
